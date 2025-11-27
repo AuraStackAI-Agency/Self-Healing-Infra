@@ -1,0 +1,123 @@
+{
+  "description": "Liste blanche des commandes autorisées pour l'auto-guérison",
+  "version": "1.0.0",
+  "safe_commands": {
+    "service_management": {
+      "description": "Gestion des services systemd",
+      "allowed": [
+        "systemctl restart {service}",
+        "systemctl start {service}",
+        "systemctl stop {service}",
+        "systemctl status {service}",
+        "systemctl reload {service}"
+      ],
+      "allowed_services": [
+        "nginx",
+        "apache2",
+        "postgresql",
+        "redis",
+        "docker",
+        "ssh"
+      ]
+    },
+    "docker_management": {
+      "description": "Gestion des conteneurs Docker",
+      "allowed": [
+        "docker restart {container}",
+        "docker start {container}",
+        "docker stop {container}",
+        "docker logs --tail {lines} {container}",
+        "docker ps -a",
+        "docker stats --no-stream"
+      ],
+      "max_log_lines": 500
+    },
+    "log_management": {
+      "description": "Consultation et nettoyage des logs",
+      "allowed": [
+        "tail -n {lines} {logfile}",
+        "journalctl -u {service} -n {lines}",
+        "journalctl --vacuum-size=500M",
+        "truncate -s 0 {logfile}"
+      ],
+      "allowed_log_paths": [
+        "/var/log/nginx/",
+        "/var/log/apache2/",
+        "/var/log/syslog",
+        "/var/log/auth.log",
+        "/var/log/docker/"
+      ],
+      "max_log_lines": 1000
+    },
+    "disk_management": {
+      "description": "Nettoyage disque sécurisé",
+      "allowed": [
+        "df -h",
+        "du -sh {path}",
+        "apt-get clean",
+        "apt-get autoremove -y",
+        "docker system prune -f",
+        "docker volume prune -f",
+        "journalctl --vacuum-time=7d"
+      ],
+      "allowed_paths_for_du": [
+        "/var/log",
+        "/tmp",
+        "/var/cache",
+        "/opt"
+      ]
+    },
+    "network_diagnostics": {
+      "description": "Diagnostics réseau",
+      "allowed": [
+        "ping -c 4 {host}",
+        "curl -I {url}",
+        "ss -tlnp",
+        "netstat -tlnp"
+      ]
+    },
+    "system_info": {
+      "description": "Information système",
+      "allowed": [
+        "uptime",
+        "free -h",
+        "df -h",
+        "top -bn1 | head -20",
+        "ps aux --sort=-%mem | head -20",
+        "cat /proc/loadavg"
+      ]
+    }
+  },
+  "blocked_patterns": {
+    "description": "Patterns de commandes TOUJOURS bloquées",
+    "patterns": [
+      "rm -rf",
+      "rm -r /",
+      "dd if=",
+      "mkfs",
+      "fdisk",
+      "> /dev/",
+      "chmod 777",
+      "chmod -R 777",
+      ":(){:|:&};:",
+      "wget.*|.*sh",
+      "curl.*|.*sh",
+      "eval",
+      "exec",
+      "DROP DATABASE",
+      "DROP TABLE",
+      "TRUNCATE",
+      "DELETE FROM.*WHERE 1=1",
+      "--no-preserve-root"
+    ]
+  },
+  "validation_rules": {
+    "max_command_length": 500,
+    "require_human_approval_for": [
+      "Any command not in safe_commands list",
+      "Commands affecting multiple services",
+      "Commands with wildcards (*)",
+      "Commands running as different user (su, sudo -u)"
+    ]
+  }
+}

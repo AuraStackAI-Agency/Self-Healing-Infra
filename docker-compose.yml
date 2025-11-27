@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # UPTIME KUMA - Monitoring & Alertes
+  # ============================================
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - uptime-kuma-data:/app/data
+    environment:
+      - TZ=Europe/Paris
+    networks:
+      - auto-repare-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  uptime-kuma-data:
+    driver: local
+
+networks:
+  auto-repare-network:
+    driver: bridge
+    name: auto-repare-network
