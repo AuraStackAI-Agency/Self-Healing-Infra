@@ -27,6 +27,80 @@
     },
     {
       "parameters": {
+        "method": "POST",
+        "url": "http://137.74.44.64:11434/api/embeddings",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"nomic-embed-text\",\n  \"prompt\": \"{{ $json.service_name }} {{ $json.message }}\"\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "rag-embed",
+      "name": "RAG - Embedding",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, -200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://137.74.44.64:6333/collections/incidents_history/points/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"vector\": {{ JSON.stringify($json.embedding) }},\n  \"limit\": 1,\n  \"with_payload\": true,\n  \"score_threshold\": 0.85\n}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "rag-search",
+      "name": "RAG - Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, -200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-found",
+              "leftValue": "={{ $json.result && $json.result.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "rag-check",
+      "name": "Solution Connue?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, -200]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const incident = $('Normaliser Payload').first().json;\nconst ragResult = $input.first().json.result[0];\nincident.level_1_diagnosis = {\n  cause: 'RAG Fast Track: ' + ragResult.payload.error_type,\n  confidence: ragResult.score,\n  action_command: ragResult.payload.solution_applied,\n  action_type: 'restart',\n  is_safe: true,\n  explanation: 'Solution found in history with high confidence'\n};\nincident.level_1_action = ragResult.payload.solution_applied;\nreturn [{ json: incident }];"
+      },
+      "id": "apply-rag-solution",
+      "name": "Appliquer Solution RAG",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, -200]
+    },
+    {
+      "parameters": {
         "conditions": {
           "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
           "conditions": [{"id": "condition-down", "leftValue": "={{ $json.status }}", "rightValue": "DOWN", "operator": {"type": "string", "operation": "equals"}}],
@@ -38,7 +112,7 @@
       "name": "Service Down?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [440, 0]
+      "position": [440, 200]
     },
     {
       "parameters": {
@@ -48,7 +122,7 @@
       "name": "SSH - Collecter Logs",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [660, -100],
+      "position": [660, 100],
       "credentials": {
         "sshPrivateKey": {
           "id": "YOUR_SSH_CREDENTIAL_ID",
@@ -64,7 +138,7 @@
       "name": "SSH - Docker Logs",
       "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
-      "position": [660, 100],
+      "position": [660, 300],
       "credentials": {
         "sshPrivateKey": {
           "id": "YOUR_SSH_CREDENTIAL_ID",
@@ -81,7 +155,7 @@
       "name": "Agreger Logs",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [880, 0]
+      "position": [880, 200]
     },
     {
       "parameters": {
@@ -96,7 +170,7 @@
       "name": "Ollama - Qwen N1",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1100, 0]
+      "position": [1100, 200]
     },
     {
       "parameters": {
@@ -107,7 +181,7 @@
       "name": "Parser Reponse Qwen",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1320, 0]
+      "position": [1320, 200]
     },
     {
       "parameters": {
@@ -126,7 +200,7 @@
       "name": "Action Safe?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1540, 0]
+      "position": [1540, 200]
     },
     {
       "parameters": {
@@ -140,7 +214,7 @@
       "name": "Appeler Action Executor",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1760, -100]
+      "position": [1900, 0]
     },
     {
       "parameters": {
@@ -154,7 +228,7 @@
       "name": "Escalader vers N2",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1760, 100]
+      "position": [1900, 200]
     },
     {
       "parameters": {},
@@ -162,12 +236,21 @@
       "name": "Fin - Service UP",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [660, 200]
+      "position": [660, 400]
     }
   ],
   "connections": {
     "Webhook Uptime Kuma": {"main": [[{"node": "Normaliser Payload", "type": "main", "index": 0}]]},
-    "Normaliser Payload": {"main": [[{"node": "Service Down?", "type": "main", "index": 0}]]},
+    "Normaliser Payload": {"main": [[{"node": "RAG - Embedding", "type": "main", "index": 0}]]},
+    "RAG - Embedding": {"main": [[{"node": "RAG - Search", "type": "main", "index": 0}]]},
+    "RAG - Search": {"main": [[{"node": "Solution Connue?", "type": "main", "index": 0}]]},
+    "Solution Connue?": {
+      "main": [
+        [{"node": "Appliquer Solution RAG", "type": "main", "index": 0}],
+        [{"node": "Service Down?", "type": "main", "index": 0}]
+      ]
+    },
+    "Appliquer Solution RAG": {"main": [[{"node": "Appeler Action Executor", "type": "main", "index": 0}]]},
     "Service Down?": {"main": [[{"node": "SSH - Collecter Logs", "type": "main", "index": 0}, {"node": "SSH - Docker Logs", "type": "main", "index": 0}], [{"node": "Fin - Service UP", "type": "main", "index": 0}]]},
     "SSH - Collecter Logs": {"main": [[{"node": "Agreger Logs", "type": "main", "index": 0}]]},
     "SSH - Docker Logs": {"main": [[{"node": "Agreger Logs", "type": "main", "index": 0}]]},

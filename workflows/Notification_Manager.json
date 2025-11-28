@@ -11,7 +11,10 @@
       "name": "Webhook Notification",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "webhookId": "auto-repare-notify"
     },
     {
@@ -41,7 +44,10 @@
       "name": "Type de Notification",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [220, 0]
+      "position": [
+        220,
+        0
+      ]
     },
     {
       "parameters": {
@@ -52,18 +58,24 @@
       "name": "Générer Email Succès",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, -100]
+      "position": [
+        440,
+        -100
+      ]
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Générer l'email d'escalade avec liens de validation\nconst data = $input.first().json;\nconst incident = data.incident || data;\nconst recommendation = incident.level_2_recommendation || {};\n\n// Générer des tokens uniques pour les actions\nconst crypto = require('crypto');\nconst validateToken = crypto.randomBytes(32).toString('hex');\nconst ignoreToken = crypto.randomBytes(32).toString('hex');\n\nconst webhookBase = process.env.N8N_WEBHOOK_URL || 'https://n8n.aurastackai.com/webhook/';\nconst validateUrl = `${webhookBase}auto-repare/validate-action?token=${validateToken}&incident_id=${incident.incident_id}&action=approve`;\nconst ignoreUrl = `${webhookBase}auto-repare/validate-action?token=${ignoreToken}&incident_id=${incident.incident_id}&action=ignore`;\n\nconst severityColors = {\n  critical: '#dc2626',\n  high: '#f97316',\n  medium: '#eab308',\n  low: '#22c55e'\n};\nconst severityColor = severityColors[recommendation.severity] || '#6b7280';\n\nconst html = `\n<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f5f5; padding: 20px; }\n    .container { max-width: 700px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }\n    .header { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; padding: 30px; text-align: center; }\n    .header h1 { margin: 0; font-size: 24px; }\n    .header .icon { font-size: 48px; margin-bottom: 10px; }\n    .content { padding: 30px; }\n    .severity { display: inline-block; padding: 4px 12px; border-radius: 20px; color: white; font-weight: bold; text-transform: uppercase; font-size: 12px; }\n    .info-box { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 15px; margin: 15px 0; border-radius: 0 4px 4px 0; }\n    .danger-box { background: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin: 15px 0; border-radius: 0 4px 4px 0; }\n    .label { color: #6b7280; font-size: 12px; text-transform: uppercase; margin-bottom: 5px; }\n    .value { color: #111827; font-size: 14px; }\n    code { background: #1f2937; color: #10b981; padding: 10px 15px; border-radius: 4px; font-family: 'Consolas', monospace; display: block; margin: 10px 0; white-space: pre-wrap; word-break: break-all; }\n    .actions { text-align: center; padding: 30px; background: #f9fafb; }\n    .btn { display: inline-block; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px; margin: 10px; }\n    .btn-approve { background: #10b981; color: white; }\n    .btn-ignore { background: #6b7280; color: white; }\n    .risks { background: #fef2f2; padding: 15px; border-radius: 8px; margin: 15px 0; }\n    .risks ul { margin: 10px 0; padding-left: 20px; }\n    .footer { padding: 20px; text-align: center; color: #6b7280; font-size: 12px; border-top: 1px solid #e5e7eb; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <div class=\"icon\">⚠️</div>\n      <h1>Validation Requise - Niveau 2</h1>\n    </div>\n    <div class=\"content\">\n      <p style=\"text-align: center;\">\n        <span class=\"severity\" style=\"background: ${severityColor}\">\n          ${recommendation.severity || 'UNKNOWN'}\n        </span>\n      </p>\n      \n      <div class=\"info-box\">\n        <div class=\"label\">Incident ID</div>\n        <div class=\"value\">${incident.incident_id || 'N/A'}</div>\n      </div>\n      \n      <div class=\"info-box\">\n        <div class=\"label\">Service Affecté</div>\n        <div class=\"value\">${incident.service_name || incident.monitor_name || 'N/A'}</div>\n      </div>\n      \n      <div class=\"info-box\">\n        <div class=\"label\">Cause Racine Identifiée</div>\n        <div class=\"value\">${recommendation.root_cause || 'Analyse en cours...'}</div>\n      </div>\n      \n      <div class=\"info-box\">\n        <div class=\"label\">Analyse Expert</div>\n        <div class=\"value\">${recommendation.analysis || 'N/A'}</div>\n      </div>\n      \n      <div class=\"danger-box\">\n        <div class=\"label\">⚡ Action Recommandée</div>\n        <code>${recommendation.action_command || 'Aucune action automatique disponible'}</code>\n        <div class=\"value\" style=\"margin-top: 10px;\">${recommendation.action_explanation || ''}</div>\n      </div>\n      \n      ${recommendation.risks && recommendation.risks.length > 0 ? `\n      <div class=\"risks\">\n        <div class=\"label\">⚠️ Risques Identifiés</div>\n        <ul>\n          ${recommendation.risks.map(r => `<li>${r}</li>`).join('')}\n        </ul>\n      </div>\n      ` : ''}\n      \n      ${recommendation.rollback_command ? `\n      <div class=\"info-box\">\n        <div class=\"label\">🔄 Commande de Rollback</div>\n        <code>${recommendation.rollback_command}</code>\n      </div>\n      ` : ''}\n    </div>\n    \n    <div class=\"actions\">\n      <p style=\"margin-bottom: 20px; color: #374151;\">Cette action nécessite votre validation :</p>\n      <a href=\"${validateUrl}\" class=\"btn btn-approve\">✅ VALIDER L'ACTION</a>\n      <a href=\"${ignoreUrl}\" class=\"btn btn-ignore\">❌ IGNORER</a>\n    </div>\n    \n    <div class=\"footer\">\n      🤖 Auto-Repare - Système d'Auto-Guérison Infrastructure<br>\n      <small>Cet email expire dans 1 heure</small>\n    </div>\n  </div>\n</body>\n</html>\n`;\n\nreturn [{\n  json: {\n    subject: `⚠️ [Auto-Repare] Validation requise - ${incident.service_name || 'Service'}`,\n    html: html,\n    incident: incident,\n    tokens: {\n      validate: validateToken,\n      ignore: ignoreToken\n    }\n  }\n}];"
+        "jsCode": "// Générer l'email d'escalade avec liens de validation\nconst data = $input.first().json;\nconst incident = data.incident || data;\nconst recommendation = incident.level_2_recommendation || {};\n\n// Générer des tokens uniques pour les actions\nconst crypto = require('crypto');\nconst validateToken = crypto.randomBytes(32).toString('hex');\nconst ignoreToken = crypto.randomBytes(32).toString('hex');\n\nconst webhookBase = process.env.N8N_WEBHOOK_URL || 'https://n8n.aurastackai.com/webhook/';\nconst validateUrl = `${webhookBase}auto-repare/validate-action?token=${validateToken}&incident_id=${incident.incident_id}&action=approve`;\nconst ignoreUrl = `${webhookBase}auto-repare/validate-action?token=${ignoreToken}&incident_id=${incident.incident_id}&action=ignore`;\nconst escalateUrl = `${webhookBase}auto-repare/validate-action?token=${validateToken}&incident_id=${incident.incident_id}&action=escalate_n3`;\n\nconst severityColors = {\n  critical: '#dc2626',\n  high: '#f97316',\n  medium: '#eab308',\n  low: '#22c55e'\n};\nconst severityColor = severityColors[recommendation.severity] || '#6b7280';\n\nconst html = `\n<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f5f5; padding: 20px; }\n    .container { max-width: 700px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }\n    .header { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; padding: 30px; text-align: center; }\n    .header h1 { margin: 0; font-size: 24px; }\n    .header .icon { font-size: 48px; margin-bottom: 10px; }\n    .content { padding: 30px; }\n    .severity { display: inline-block; padding: 4px 12px; border-radius: 20px; color: white; font-weight: bold; text-transform: uppercase; font-size: 12px; }\n    .info-box { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 15px; margin: 15px 0; border-radius: 0 4px 4px 0; }\n    .danger-box { background: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin: 15px 0; border-radius: 0 4px 4px 0; }\n    .label { color: #6b7280; font-size: 12px; text-transform: uppercase; margin-bottom: 5px; }\n    .value { color: #111827; font-size: 14px; }\n    code { background: #1f2937; color: #10b981; padding: 10px 15px; border-radius: 4px; font-family: 'Consolas', monospace; display: block; margin: 10px 0; white-space: pre-wrap; word-break: break-all; }\n    .actions { text-align: center; padding: 30px; background: #f9fafb; }\n    .btn { display: inline-block; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px; margin: 10px; }\n    .btn-approve { background: #10b981; color: white; }\n    .btn-ignore { background: #6b7280; color: white; }\n    .btn-escalate { background: #dc2626; color: white; }\n    .risks { background: #fef2f2; padding: 15px; border-radius: 8px; margin: 15px 0; }\n    .risks ul { margin: 10px 0; padding-left: 20px; }\n    .footer { padding: 20px; text-align: center; color: #6b7280; font-size: 12px; border-top: 1px solid #e5e7eb; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <div class=\"icon\">⚠️</div>\n      <h1>Validation Requise - Niveau 2</h1>\n    </div>\n    <div class=\"content\">\n      <p style=\"text-align: center;\">\n        <span class=\"severity\" style=\"background: ${severityColor}\">\n          ${recommendation.severity || 'UNKNOWN'}\n        </span>\n      </p>\n      \n      <div class=\"info-box\">\n        <div class=\"label\">Incident ID</div>\n        <div class=\"value\">${incident.incident_id || 'N/A'}</div>\n      </div>\n      \n      <div class=\"info-box\">\n        <div class=\"label\">Service Affecté</div>\n        <div class=\"value\">${incident.service_name || incident.monitor_name || 'N/A'}</div>\n      </div>\n      \n      <div class=\"info-box\">\n        <div class=\"label\">Cause Racine Identifiée</div>\n        <div class=\"value\">${recommendation.root_cause || 'Analyse en cours...'}</div>\n      </div>\n      \n      <div class=\"info-box\">\n        <div class=\"label\">Analyse Expert</div>\n        <div class=\"value\">${recommendation.analysis || 'N/A'}</div>\n      </div>\n      \n      <div class=\"danger-box\">\n        <div class=\"label\">⚡ Action Recommandée</div>\n        <code>${recommendation.action_command || 'Aucune action automatique disponible'}</code>\n        <div class=\"value\" style=\"margin-top: 10px;\">${recommendation.action_explanation || ''}</div>\n      </div>\n      \n      ${recommendation.risks && recommendation.risks.length > 0 ? `\n      <div class=\"risks\">\n        <div class=\"label\">⚠️ Risques Identifiés</div>\n        <ul>\n          ${recommendation.risks.map(r => `<li>${r}</li>`).join('')}\n        </ul>\n      </div>\n      ` : ''}\n      \n      ${recommendation.rollback_command ? `\n      <div class=\"info-box\">\n        <div class=\"label\">🔄 Commande de Rollback</div>\n        <code>${recommendation.rollback_command}</code>\n      </div>\n      ` : ''}\n    </div>\n    \n    <div class=\"actions\">\n      <p style=\"margin-bottom: 20px; color: #374151;\">Cette action nécessite votre validation :</p>\n      <a href=\"${validateUrl}\" class=\"btn btn-approve\">✅ VALIDER</a>\n      <a href=\"${ignoreUrl}\" class=\"btn btn-ignore\">❌ IGNORER</a>\n      <br>\n      <a href=\"${escalateUrl}\" class=\"btn btn-escalate\" style=\"font-size: 12px; padding: 10px 20px; margin-top: 20px;\">🚨 ESCALADE N3 (OPUS)</a>\n    </div>\n    \n    <div class=\"footer\">\n      🤖 Auto-Repare - Système d'Auto-Guérison Infrastructure<br>\n      <small>Cet email expire dans 1 heure</small>\n    </div>\n  </div>\n</body>\n</html>\n`;\n\nreturn [{\n  json: {\n    subject: `⚠️ [Auto-Repare] Validation requise - ${incident.service_name || 'Service'}`,\n    html: html,\n    incident: incident,\n    tokens: {\n      validate: validateToken,\n      ignore: ignoreToken\n    }\n  }\n}];"
       },
       "id": "generate-escalation-email",
       "name": "Générer Email Escalade",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 100]
+      "position": [
+        440,
+        100
+      ]
     },
     {
       "parameters": {
@@ -78,7 +90,10 @@
       "name": "Envoyer Email Succès",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
-      "position": [660, -100],
+      "position": [
+        660,
+        -100
+      ],
       "credentials": {
         "smtp": {
           "id": "SMTP_CREDENTIAL_ID",
@@ -99,7 +114,10 @@
       "name": "Envoyer Email Escalade",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
-      "position": [660, 100],
+      "position": [
+        660,
+        100
+      ],
       "credentials": {
         "smtp": {
           "id": "SMTP_CREDENTIAL_ID",
@@ -119,7 +137,10 @@
       "name": "Webhook Validation",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 400],
+      "position": [
+        0,
+        400
+      ],
       "webhookId": "auto-repare-validate"
     },
     {
@@ -149,7 +170,10 @@
       "name": "Action Approuvée?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [220, 400]
+      "position": [
+        220,
+        400
+      ]
     },
     {
       "parameters": {
@@ -163,7 +187,10 @@
       "name": "Exécuter Action Approuvée",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [440, 300]
+      "position": [
+        440,
+        300
+      ]
     },
     {
       "parameters": {
@@ -175,7 +202,74 @@
       "name": "Réponse - Approuvé",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [660, 300]
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-escalate",
+              "leftValue": "={{ $json.query.action }}",
+              "rightValue": "escalate_n3",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-escalation",
+      "name": "Escalade N3?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.N8N_WEBHOOK_URL }}auto-repare/escalate-n3",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"incident_id\": \"{{ $json.query.incident_id }}\",\n  \"reason\": \"Manual Escalation to N3\"\n}",
+        "options": {}
+      },
+      "id": "trigger-n3",
+      "name": "Trigger N3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #fef2f2; }\n    .card { background: white; padding: 40px; border-radius: 12px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }\n    .icon { font-size: 64px; margin-bottom: 20px; }\n    h1 { color: #dc2626; margin-bottom: 10px; }\n    p { color: #6b7280; }\n  </style>\n</head>\n<body>\n  <div class=\"card\">\n    <div class=\"icon\">🚨</div>\n    <h1>Escalade N3 Confirmée</h1>\n    <p>L'incident a été transmis à l'Architecte IA (Opus).<br>Un rapport d'expertise sera généré sous peu.</p>\n  </div>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "respond-escalated",
+      "name": "Réponse - Escaladé",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        500
+      ]
     },
     {
       "parameters": {
@@ -187,7 +281,10 @@
       "name": "Réponse - Ignoré",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [440, 500]
+      "position": [
+        660,
+        700
+      ]
     },
     {
       "parameters": {
@@ -199,7 +296,10 @@
       "name": "Webhook Execute Approved",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 700],
+      "position": [
+        0,
+        700
+      ],
       "webhookId": "auto-repare-execute-approved"
     },
     {
@@ -211,7 +311,10 @@
       "name": "Récupérer Incident",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 700]
+      "position": [
+        220,
+        700
+      ]
     },
     {
       "parameters": {
@@ -226,61 +329,221 @@
       "name": "Envoyer Confirmation",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
-      "position": [440, 700],
+      "position": [
+        440,
+        700
+      ],
       "credentials": {
         "smtp": {
           "id": "SMTP_CREDENTIAL_ID",
           "name": "SMTP"
         }
       }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://137.74.44.64:11434/api/embeddings",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"nomic-embed-text\",\n  \"prompt\": \"{{ $json.service_name }} N2 resolution success\"\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "embed-n2-success",
+      "name": "Embedding N2 Succès",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "http://137.74.44.64:6333/collections/incidents_history/points",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"points\": [{\n    \"id\": {{ Date.now() }},\n    \"vector\": {{ JSON.stringify($json.embedding) }},\n    \"payload\": {\n      \"incident_id\": \"{{ $('Récupérer Incident').item.json.incident_id }}\",\n      \"resolution_level\": \"N2\",\n      \"resolution_success\": true,\n      \"resolved_at\": \"{{ new Date().toISOString() }}\"\n    }\n  }]\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "store-n2-success",
+      "name": "Qdrant - Stocker N2 Succès",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        700
+      ]
     }
   ],
   "connections": {
     "Webhook Notification": {
       "main": [
-        [{ "node": "Type de Notification", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Type de Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Type de Notification": {
       "main": [
-        [{ "node": "Générer Email Succès", "type": "main", "index": 0 }],
-        [{ "node": "Générer Email Escalade", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Générer Email Succès",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Générer Email Escalade",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Générer Email Succès": {
       "main": [
-        [{ "node": "Envoyer Email Succès", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Envoyer Email Succès",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Générer Email Escalade": {
       "main": [
-        [{ "node": "Envoyer Email Escalade", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Envoyer Email Escalade",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Webhook Validation": {
       "main": [
-        [{ "node": "Action Approuvée?", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Action Approuvée?",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Action Approuvée?": {
       "main": [
-        [{ "node": "Exécuter Action Approuvée", "type": "main", "index": 0 }],
-        [{ "node": "Réponse - Ignoré", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Exécuter Action Approuvée",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Escalade N3?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalade N3?": {
+      "main": [
+        [
+          {
+            "node": "Trigger N3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Réponse - Ignoré",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger N3": {
+      "main": [
+        [
+          {
+            "node": "Réponse - Escaladé",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Exécuter Action Approuvée": {
       "main": [
-        [{ "node": "Réponse - Approuvé", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Réponse - Approuvé",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Webhook Execute Approved": {
       "main": [
-        [{ "node": "Récupérer Incident", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Récupérer Incident",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Récupérer Incident": {
       "main": [
-        [{ "node": "Envoyer Confirmation", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Envoyer Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envoyer Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Embedding N2 Succès",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embedding N2 Succès": {
+      "main": [
+        [
+          {
+            "node": "Qdrant - Stocker N2 Succès",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
@@ -292,8 +555,12 @@
   },
   "staticData": null,
   "tags": [
-    { "name": "auto-repare" },
-    { "name": "notifications" }
+    {
+      "name": "auto-repare"
+    },
+    {
+      "name": "notifications"
+    }
   ],
   "triggerCount": 3,
   "versionId": "1.0.0"

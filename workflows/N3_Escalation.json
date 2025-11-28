@@ -1,0 +1,163 @@
+{
+    "name": "Auto-Repare - N3 Escalation (Opus)",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "auto-repare/escalate-n3",
+                "options": {}
+            },
+            "id": "webhook-n3",
+            "name": "Webhook Escalade N3",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                0,
+                0
+            ],
+            "webhookId": "auto-repare-escalate-n3"
+        },
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": "const incident = $input.first().json;\nconst context = `\nINCIDENT REPORT\nID: ${incident.incident_id}\nService: ${incident.service_name}\nStatus: ${incident.status}\n\nN1 DIAGNOSIS:\n${JSON.stringify(incident.level_1_diagnosis, null, 2)}\n\nN2 RECOMMENDATION (REJECTED/FAILED):\n${JSON.stringify(incident.level_2_recommendation, null, 2)}\n\nLOGS:\n${incident.error_logs?.substring(0, 5000) || 'N/A'}\n`;\nincident._opus_context = context;\nreturn [{ json: incident }];"
+            },
+            "id": "prepare-opus-context",
+            "name": "Préparer Contexte Opus",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                220,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://api.anthropic.com/v1/messages",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "anthropic-version",
+                            "value": "2023-06-01"
+                        },
+                        {
+                            "name": "content-type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"model\": \"claude-3-opus-20240229\",\n  \"max_tokens\": 4000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Tu es l'Architecte Système Senior (Niveau 3). Analyse cet incident critique qui a échoué aux niveaux N1 et N2.\\n\\nCONTEXTE:\\n{{ $json._opus_context }}\\n\\nTACHE:\\nProduis un Rapport d'Expertise complet au format Markdown.\\n1. Résumé de l'incident\\n2. Analyse Root Cause Profonde (Hypothèses)\\n3. Critique des tentatives précédentes (Pourquoi N1/N2 ont échoué ?)\\n4. Plan de Remédiation (Étapes précises)\\n5. Recommandations Architecture/Config pour éviter la récidive\\n\\nLe rapport doit être technique, précis et sans blabla.\"}\n  ]\n}",
+                "options": {
+                    "timeout": 180000
+                }
+            },
+            "id": "claude-opus",
+            "name": "Claude Opus 4.5 (N3)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                440,
+                0
+            ],
+            "credentials": {
+                "httpHeaderAuth": {
+                    "id": "YOUR_ANTHROPIC_CREDENTIAL_ID",
+                    "name": "Anthropic API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": "const incident = $('Préparer Contexte Opus').first().json;\nconst opusResponse = $input.first().json;\nconst report = opusResponse.content?.[0]?.text || 'Erreur génération rapport';\nincident.n3_report = report;\nreturn [{ json: incident }];"
+            },
+            "id": "format-report",
+            "name": "Formater Rapport",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                660,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "fromEmail": "={{ $env.SMTP_FROM || 'auto-repare@aurastackai.com' }}",
+                "toEmail": "={{ $env.ALERT_EMAIL_TO || 'admin@aurastackai.com' }}",
+                "subject": "=🚨 [N3 CRITICAL] Rapport Expertise - {{ $json.service_name }}",
+                "emailType": "text",
+                "text": "={{ $json.n3_report }}",
+                "options": {}
+            },
+            "id": "email-report",
+            "name": "Envoyer Rapport N3",
+            "type": "n8n-nodes-base.emailSend",
+            "typeVersion": 2.1,
+            "position": [
+                880,
+                0
+            ],
+            "credentials": {
+                "smtp": {
+                    "id": "SMTP_CREDENTIAL_ID",
+                    "name": "SMTP"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "Webhook Escalade N3": {
+            "main": [
+                [
+                    {
+                        "node": "Préparer Contexte Opus",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Préparer Contexte Opus": {
+            "main": [
+                [
+                    {
+                        "node": "Claude Opus 4.5 (N3)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Claude Opus 4.5 (N3)": {
+            "main": [
+                [
+                    {
+                        "node": "Formater Rapport",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Formater Rapport": {
+            "main": [
+                [
+                    {
+                        "node": "Envoyer Rapport N3",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}
