@@ -1,6 +1,6 @@
 # Self-Healing Infra - Agentic Auto-Fix System
 
-Système autonome de supervision serveur (VPS Debian) capable de détecter une panne, tenter une résolution automatique, et escalader si nécessaire.
+Architecture AIOps Enterprise-Grade : Orchestration N8N + IA Hybride (Qwen/Claude) avec contrôle humain strict.
 
 ## Architecture
 
@@ -184,3 +184,7 @@ Structure JSON standardisée circulant entre les nœuds :
 ## Licence
 
 MIT
+
+
+---
+**Open for opportunities: I design autonomous infrastructures. Contact me on LinkedIn.**
