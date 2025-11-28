@@ -1,4 +1,4 @@
-# Auto-Repare - Self-Healing Infrastructure
+# Self-Healing Infra - Agentic Auto-Fix System
 
 Système autonome de supervision serveur (VPS Debian) capable de détecter une panne, tenter une résolution automatique, et escalader si nécessaire.
 
@@ -8,35 +8,44 @@ Système autonome de supervision serveur (VPS Debian) capable de détecter une p
 ┌─────────────────┐     Webhook      ┌──────────────────────────────────────┐
 │  Uptime Kuma    │ ───────────────► │           N8N Workflows               │
 │  (Monitoring)   │                  │                                       │
-└─────────────────┘                  │  ┌─────────────────────────────────┐  │
-                                     │  │     Main_Supervisor.json        │  │
-                                     │  │  • Réception alerte             │  │
-                                     │  │  • Collecte logs SSH            │  │
-                                     │  │  • Appel Qwen (N1)              │  │
-                                     │  └──────────────┬──────────────────┘  │
-                                     │                 │                     │
-                                     │  ┌──────────────▼──────────────────┐  │
-                                     │  │     Action_Executor.json        │  │
-                                     │  │  • Exécution actions safe       │  │
-                                     │  │  • Vérification post-action     │  │
-                                     │  │  • Escalade N2 si échec         │  │
-                                     │  └──────────────┬──────────────────┘  │
-                                     │                 │                     │
-                                     │  ┌──────────────▼──────────────────┐  │
-                                     │  │   Notification_Manager.json     │  │
-                                     │  │  • Email HTML actionnable       │  │
-                                     │  │  • Webhook validation humaine   │  │
-                                     │  │  • Confirmation finale          │  │
-                                     │  └─────────────────────────────────┘  │
-                                     └──────────────────────────────────────┘
-                                                       │
-                     ┌─────────────────────────────────┼─────────────────────────────────┐
-                     │                                 │                                 │
-              ┌──────▼──────┐                  ┌───────▼───────┐                ┌────────▼────────┐
-              │   Ollama    │                  │  Claude API   │                │   Email SMTP    │
-              │  Qwen 2.5   │                  │  (Niveau 2)   │                │  (Validation)   │
-              │  (Niveau 1) │                  └───────────────┘                └─────────────────┘
-              └─────────────┘
+│                 │                  │  ┌─────────────────────────────────┐  │
+│                 │                  │  │     Main_Supervisor.json        │  │
+│                 │                  │  │  • Réception alerte             │  │
+│                 │                  │  │  • Collecte logs SSH            │  │
+│                 │                  │  │  • Appel Qwen (N1)              │  │
+│                 │                  │  └──────────────┬──────────────────┘  │
+│                 │                  │                 │                     │
+│                 │                  │  ┌──────────────▼──────────────────┐  │
+│                 │                  │  │   Safety Check (Regex Gate)     │  │
+│                 │                  │  │  • Validation Commandes         │  │
+│                 │                  │  └──────────────┬──────────────────┘  │
+│                 │                  │                 │                     │
+│                 │                  │  ┌──────────────▼──────────────────┐  │
+│                 │                  │  │     Action_Executor.json        │  │
+│                 │                  │  │  • Exécution actions safe       │  │
+│                 │                  │  │  • Vérification post-action     │  │
+│                 │                  │  │  • Escalade N2 si échec         │  │
+│                 │                  │  └──────────────┬──────────────────┘  │
+│                 │                  │                 │                     │
+│                 │                  │  ┌──────────────▼──────────────────┐  │
+│                 │                  │  │   Notification_Manager.json     │  │
+│                 │                  │  │  • Email HTML actionnable       │  │
+│                 │                  │  │  • Webhook validation humaine   │  │
+│                 │                  │  │  • Confirmation finale          │  │
+│                 │                  │  └─────────────────────────────────┘  │
+│                 │                  └──────────────────────────────────────┘
+│                                                      │
+│                    ┌─────────────────────────────────┼─────────────────────────────────┐
+│                    │                                 │                                 │
+│             ┌──────▼──────┐                  ┌───────▼───────┐                ┌────────▼────────┐
+│             │   Ollama    │                  │  Claude API   │                │   Email SMTP    │
+│             │  Qwen 2.5   │                  │  (Niveau 1)   │                │  (Validation)   │
+│             │  (Niveau 1) │                  └───────┬───────┘                └─────────────────┘
+│             └─────────────┘                          │
+│                                              ┌───────▼───────┐
+│                                              │ Vector Store  │
+│                                              │ (RAG Memory)  │
+│                                              └───────────────┘
 ```
 
 ## Stack Technique
@@ -48,6 +57,7 @@ Système autonome de supervision serveur (VPS Debian) capable de détecter une p
 | **Ollama** | LLM local (Qwen 2.5) | 11434 |
 | **Redis** | Queue N8N | 6379 |
 | **PostgreSQL** | Base N8N | 5432 |
+| **Qdrant/Chroma** | Vector Store (RAG) | 6333 |
 
 ## Niveaux de Résolution
 
@@ -55,18 +65,44 @@ Système autonome de supervision serveur (VPS Debian) capable de détecter une p
 - Analyse rapide des logs
 - Actions simples et sécurisées (restart, clear cache)
 - Temps de réponse < 5s
-- Pas de coût API
+- **Pas de coût API**
 
 ### Niveau 2 - Claude (Cloud)
 - Analyse approfondie
 - Diagnostic root cause
 - Recommandations complexes
-- Validation humaine requise
+- **Validation humaine requise**
+- **Apprentissage :** Les succès validés enrichissent le contexte RAG pour les futurs incidents (Feedback Loop).
+
+## Sécurité par Design
+
+Le système intègre une "Gate" de sécurité stricte. Aucune commande générée par l'IA n'est exécutée sans validation par liste blanche.
+
+Exemple de configuration `config/safe_commands.json` :
+
+```json
+{
+  "safe_commands": {
+    "service_management": {
+      "allowed": [
+        "systemctl restart {service}",
+        "systemctl start {service}"
+      ],
+      "allowed_services": ["nginx", "apache2", "docker"]
+    },
+    "blocked_patterns": [
+      "rm -rf",
+      "shutdown",
+      "mkfs"
+    ]
+  }
+}
+```
 
 ## Structure du Projet
 
 ```
-auto-repare/
+self-healing-infra/
 ├── workflows/
 │   ├── Main_Supervisor.json       # Workflow principal
 │   ├── Action_Executor.json       # Exécution des actions
@@ -90,8 +126,8 @@ auto-repare/
 
 ### 1. Cloner le dépôt
 ```bash
-git clone https://github.com/VOTRE_USER/auto-repare.git
-cd auto-repare
+git clone https://github.com/VOTRE_USER/self-healing-infra.git
+cd self-healing-infra
 ```
 
 ### 2. Configurer les variables
@@ -137,16 +173,13 @@ Structure JSON standardisée circulant entre les nœuds :
     "root_cause": "Memory leak in upstream module",
     "action_command": "...",
     "requires_human_approval": true
+  },
+  "cost_estimation": {
+    "ai_cost": "$0.02",
+    "tokens_used": 450
   }
 }
 ```
-
-## Sécurité
-
-- Les commandes exécutables sont limitées à une liste blanche (`safe_commands.json`)
-- Les actions destructrices (rm, drop, etc.) sont bloquées
-- Validation humaine obligatoire pour les actions Niveau 2
-- Tokens webhooks uniques pour chaque action
 
 ## Licence
 
