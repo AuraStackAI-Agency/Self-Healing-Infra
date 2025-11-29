@@ -12,7 +12,11 @@
       "retry_interval": 30,
       "max_retries": 3,
       "description": "Interface principale N8N",
-      "tags": ["n8n", "web", "critical"]
+      "tags": [
+        "n8n",
+        "web",
+        "critical"
+      ]
     },
     {
       "name": "N8N Webhook Health",
@@ -21,8 +25,11 @@
       "interval": 120,
       "retry_interval": 60,
       "max_retries": 2,
-      "description": "Vérification webhooks N8N",
-      "tags": ["n8n", "webhook"]
+      "description": "V\u00c3\u00a9rification webhooks N8N",
+      "tags": [
+        "n8n",
+        "webhook"
+      ]
     },
     {
       "name": "VPS SSH",
@@ -33,7 +40,11 @@
       "retry_interval": 30,
       "max_retries": 3,
       "description": "Port SSH du VPS",
-      "tags": ["vps", "ssh", "critical"]
+      "tags": [
+        "vps",
+        "ssh",
+        "critical"
+      ]
     },
     {
       "name": "VPS HTTP (Uptime Kuma)",
@@ -42,8 +53,11 @@
       "interval": 60,
       "retry_interval": 30,
       "max_retries": 3,
-      "description": "Uptime Kuma lui-même",
-      "tags": ["monitoring", "uptime-kuma"]
+      "description": "Uptime Kuma lui-m\u00c3\u00aame",
+      "tags": [
+        "monitoring",
+        "uptime-kuma"
+      ]
     },
     {
       "name": "Docker N8N Main",
@@ -51,7 +65,11 @@
       "container": "n8n-main-prod",
       "interval": 30,
       "description": "Container N8N principal",
-      "tags": ["docker", "n8n", "critical"]
+      "tags": [
+        "docker",
+        "n8n",
+        "critical"
+      ]
     },
     {
       "name": "Docker N8N Worker 1",
@@ -59,7 +77,11 @@
       "container": "n8n-worker-prod-1",
       "interval": 30,
       "description": "Worker N8N 1",
-      "tags": ["docker", "n8n", "worker"]
+      "tags": [
+        "docker",
+        "n8n",
+        "worker"
+      ]
     },
     {
       "name": "Docker N8N Worker 2",
@@ -67,7 +89,11 @@
       "container": "n8n-worker-prod-2",
       "interval": 30,
       "description": "Worker N8N 2",
-      "tags": ["docker", "n8n", "worker"]
+      "tags": [
+        "docker",
+        "n8n",
+        "worker"
+      ]
     },
     {
       "name": "Docker Redis",
@@ -75,25 +101,38 @@
       "container": "n8n-redis-prod",
       "interval": 30,
       "description": "Redis pour N8N",
-      "tags": ["docker", "redis", "critical"]
+      "tags": [
+        "docker",
+        "redis",
+        "critical"
+      ]
     },
     {
       "name": "Docker PostgreSQL",
       "type": "docker",
       "container": "n8n-postgres-prod",
       "interval": 30,
-      "description": "Base de données N8N",
-      "tags": ["docker", "postgres", "critical"]
+      "description": "Base de donn\u00c3\u00a9es N8N",
+      "tags": [
+        "docker",
+        "postgres",
+        "critical"
+      ]
     },
     {
       "name": "Ollama API",
       "type": "http",
-      "url": "http://localhost:11434/api/tags",
+      "url": "http://ollama:11434/api/tags",
       "interval": 60,
       "retry_interval": 30,
       "max_retries": 2,
-      "description": "API Ollama pour Qwen",
-      "tags": ["ai", "ollama", "qwen"]
+      "description": "API Ollama pour Qwen (via Docker internal network)",
+      "tags": [
+        "ai",
+        "ollama",
+        "qwen"
+      ],
+      "network_notes": "Requires Uptime Kuma connected to bridge network"
     }
   ],
   "notification": {
