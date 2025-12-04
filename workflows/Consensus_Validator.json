@@ -1,0 +1,278 @@
+{
+  "name": "Auto-Repare - Consensus Validator (Qwen + Phi)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "auto-repare/validate-consensus",
+        "options": {}
+      },
+      "id": "webhook-consensus",
+      "name": "Webhook Consensus Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "auto-repare-consensus"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const incident = $input.first().json;\n\n// Prepare context for Qwen (Actor)\nconst qwenContext = {\n  service_name: incident.service_name || 'unknown',\n  status: incident.status || 'UNKNOWN',\n  error_logs: incident.error_logs || '',\n  monitor_url: incident.monitor_url || '',\n  timestamp: incident.timestamp || new Date().toISOString()\n};\n\nincident._qwen_context = qwenContext;\nreturn [{ json: incident }];"
+      },
+      "id": "prepare-qwen",
+      "name": "Preparer Contexte Qwen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"qwen2.5-coder:3b-instruct\",\n  \"prompt\": \"Tu es un analyste systeme ACTEUR. Analyse cet incident et propose une action en YAML.\\n\\nService: {{ $json._qwen_context.service_name }}\\nStatus: {{ $json._qwen_context.status }}\\n\\nLogs:\\n{{ $json._qwen_context.error_logs.substring(0, 2000) }}\\n\\nReponds UNIQUEMENT en YAML valide:\\n---\\ncause: \\\"description\\\"\\nconfidence: 0.85\\naction_command: \\\"commande\\\"\\naction_type: restart|reload|clean|ESCALATE\\naction_level: 1|2|3\\nis_safe: true|false\\nexplanation: \\\"explication\\\"\\nlogs_summary: \\\"resume\\\"\\nexpected_result: \\\"resultat\\\"\",\n  \"stream\": false,\n  \"options\": { \"temperature\": 0.1, \"num_predict\": 500 }\n}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "ollama-qwen-actor",
+      "name": "Qwen - Acteur (YAML)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const incident = $('Webhook Consensus Request').first().json;\nconst qwenResponse = $input.first().json;\n\n// Extract YAML from response\nlet yamlText = qwenResponse.response || '';\n\n// Clean YAML (remove markdown code blocks if present)\nyamlText = yamlText.replace(/```yaml\\n?/g, '').replace(/```\\n?/g, '').trim();\n\n// Store raw YAML for Phi\nincident._qwen_yaml = yamlText;\n\n// Parse YAML to JSON using simple parser\nfunction parseYAML(yaml) {\n  const result = {};\n  const lines = yaml.split('\\n');\n  let currentKey = null;\n  let inNested = false;\n  let nestedKey = null;\n  let nestedObj = {};\n  \n  for (const line of lines) {\n    if (line.trim() === '---' || line.trim() === '') continue;\n    \n    // Check for nested object\n    const nestedMatch = line.match(/^(\\w+):\\s*$/);\n    if (nestedMatch) {\n      if (inNested && nestedKey) {\n        result[nestedKey] = nestedObj;\n        nestedObj = {};\n      }\n      inNested = true;\n      nestedKey = nestedMatch[1];\n      continue;\n    }\n    \n    // Parse key-value\n    const match = line.match(/^(\\s*)(\\w+):\\s*(.*)/);\n    if (match) {\n      const [, indent, key, value] = match;\n      let parsedValue = value.trim();\n      \n      // Remove quotes\n      if ((parsedValue.startsWith('\"') && parsedValue.endsWith('\"')) ||\n          (parsedValue.startsWith(\"'\") && parsedValue.endsWith(\"'\"))) {\n        parsedValue = parsedValue.slice(1, -1);\n      }\n      \n      // Parse booleans and numbers\n      if (parsedValue === 'true') parsedValue = true;\n      else if (parsedValue === 'false') parsedValue = false;\n      else if (parsedValue === 'null') parsedValue = null;\n      else if (!isNaN(parsedValue) && parsedValue !== '') parsedValue = parseFloat(parsedValue);\n      \n      if (inNested && indent.length > 0) {\n        nestedObj[key] = parsedValue;\n      } else {\n        if (inNested && nestedKey) {\n          result[nestedKey] = nestedObj;\n          nestedObj = {};\n          inNested = false;\n          nestedKey = null;\n        }\n        result[key] = parsedValue;\n      }\n    }\n  }\n  \n  // Don't forget last nested object\n  if (inNested && nestedKey) {\n    result[nestedKey] = nestedObj;\n  }\n  \n  return result;\n}\n\ntry {\n  const qwenJson = parseYAML(yamlText);\n  incident._qwen_json = qwenJson;\n  incident._qwen_parse_success = true;\n} catch (e) {\n  incident._qwen_json = {\n    cause: 'Parse error',\n    confidence: 0,\n    action_command: 'ESCALATE',\n    action_level: 3,\n    is_safe: false,\n    explanation: 'Failed to parse Qwen YAML response'\n  };\n  incident._qwen_parse_success = false;\n  incident._qwen_parse_error = e.message;\n}\n\nreturn [{ json: incident }];"
+      },
+      "id": "parse-qwen-yaml",
+      "name": "Parser YAML Qwen -> JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-level2",
+              "leftValue": "={{ $json._qwen_json.action_level }}",
+              "rightValue": 2,
+              "operator": { "type": "number", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-needs-consensus",
+      "name": "Niveau 2? (Consensus Requis)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"phi3:3.8b-mini-instruct\",\n  \"prompt\": \"Tu es un CRITIQUE de securite. Valide ou rejette cette proposition en YAML.\\n\\nProposition Qwen:\\n{{ $json._qwen_yaml }}\\n\\nLogs originaux:\\n{{ $json.error_logs ? $json.error_logs.substring(0, 1500) : 'N/A' }}\\n\\nVerifie:\\n1. Commande dans whitelist (systemctl restart/reload, docker restart, apt-get clean, journalctl vacuum)\\n2. Diagnostic justifie par les logs\\n3. Pas de risque collateral\\n4. Action coherente\\n\\nReponds UNIQUEMENT en YAML:\\n---\\ndecision: APPROVED|REJECTED\\nchecks:\\n  whitelist_valid: true|false\\n  diagnostic_justified: true|false\\n  no_collateral_risk: true|false\\n  action_coherent: true|false\\nconfidence: 0.90\\nreason: \\\"justification\\\"\\nalternative: null|\\\"commande alternative\\\"\",\n  \"stream\": false,\n  \"options\": { \"temperature\": 0.1, \"num_predict\": 400 }\n}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "ollama-phi-critic",
+      "name": "Phi-3 - Critique (YAML)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, -100]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const incident = $('Parser YAML Qwen -> JSON').first().json;\nconst phiResponse = $input.first().json;\n\n// Extract YAML from response\nlet yamlText = phiResponse.response || '';\nyamlText = yamlText.replace(/```yaml\\n?/g, '').replace(/```\\n?/g, '').trim();\n\n// Store raw YAML\nincident._phi_yaml = yamlText;\n\n// Parse YAML to JSON\nfunction parseYAML(yaml) {\n  const result = {};\n  const lines = yaml.split('\\n');\n  let inNested = false;\n  let nestedKey = null;\n  let nestedObj = {};\n  \n  for (const line of lines) {\n    if (line.trim() === '---' || line.trim() === '') continue;\n    \n    const nestedMatch = line.match(/^(\\w+):\\s*$/);\n    if (nestedMatch) {\n      if (inNested && nestedKey) {\n        result[nestedKey] = nestedObj;\n        nestedObj = {};\n      }\n      inNested = true;\n      nestedKey = nestedMatch[1];\n      continue;\n    }\n    \n    const match = line.match(/^(\\s*)(\\w+):\\s*(.*)/);\n    if (match) {\n      const [, indent, key, value] = match;\n      let parsedValue = value.trim();\n      \n      if ((parsedValue.startsWith('\"') && parsedValue.endsWith('\"')) ||\n          (parsedValue.startsWith(\"'\") && parsedValue.endsWith(\"'\"))) {\n        parsedValue = parsedValue.slice(1, -1);\n      }\n      \n      if (parsedValue === 'true') parsedValue = true;\n      else if (parsedValue === 'false') parsedValue = false;\n      else if (parsedValue === 'null') parsedValue = null;\n      else if (!isNaN(parsedValue) && parsedValue !== '') parsedValue = parseFloat(parsedValue);\n      \n      if (inNested && indent.length > 0) {\n        nestedObj[key] = parsedValue;\n      } else {\n        if (inNested && nestedKey) {\n          result[nestedKey] = nestedObj;\n          nestedObj = {};\n          inNested = false;\n          nestedKey = null;\n        }\n        result[key] = parsedValue;\n      }\n    }\n  }\n  \n  if (inNested && nestedKey) {\n    result[nestedKey] = nestedObj;\n  }\n  \n  return result;\n}\n\ntry {\n  const phiJson = parseYAML(yamlText);\n  incident._phi_json = phiJson;\n  incident._phi_parse_success = true;\n} catch (e) {\n  incident._phi_json = {\n    decision: 'REJECTED',\n    reason: 'Failed to parse Phi response',\n    confidence: 0\n  };\n  incident._phi_parse_success = false;\n}\n\nreturn [{ json: incident }];"
+      },
+      "id": "parse-phi-yaml",
+      "name": "Parser YAML Phi -> JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, -100]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const incident = $input.first().json;\nconst qwen = incident._qwen_json;\nconst phi = incident._phi_json;\n\n// Build consensus result\nconst consensus = {\n  timestamp: new Date().toISOString(),\n  actor_model: 'qwen2.5-coder:3b-instruct',\n  critic_model: 'phi3:3.8b-mini-instruct',\n  \n  // Qwen proposal\n  proposal: {\n    cause: qwen.cause,\n    action_command: qwen.action_command,\n    action_level: qwen.action_level,\n    confidence: qwen.confidence,\n    is_safe: qwen.is_safe\n  },\n  \n  // Phi validation\n  validation: {\n    decision: phi.decision,\n    checks: phi.checks || {},\n    confidence: phi.confidence,\n    reason: phi.reason,\n    alternative: phi.alternative\n  },\n  \n  // Final decision\n  consensus_reached: phi.decision === 'APPROVED',\n  final_action: phi.decision === 'APPROVED' ? qwen.action_command : (phi.alternative || 'ESCALATE'),\n  should_execute: phi.decision === 'APPROVED' && qwen.is_safe && qwen.confidence >= 0.6\n};\n\nincident.consensus = consensus;\nincident.level_1_diagnosis = qwen;\nincident.level_1_action = consensus.final_action;\nincident.level_1_success = null; // Will be set after execution\n\nreturn [{ json: incident }];"
+      },
+      "id": "build-consensus",
+      "name": "Construire Resultat Consensus",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, -100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-approved",
+              "leftValue": "={{ $json.consensus.should_execute }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-consensus",
+      "name": "Consensus Approuve?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1760, -100]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.N8N_WEBHOOK_BASE_URL }}/auto-repare/execute-action",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "execute-approved",
+      "name": "Executer Action Approuvee",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, -200]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.N8N_WEBHOOK_BASE_URL }}/auto-repare/notify",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"type\": \"consensus_conflict\",\n  \"incident\": {{ JSON.stringify($json) }},\n  \"reason\": \"{{ $json.consensus.validation.reason }}\"\n}",
+        "options": {}
+      },
+      "id": "notify-conflict",
+      "name": "Notifier Conflit IA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Niveau 1 ou 3 - pas de consensus Phi requis\nconst incident = $input.first().json;\nconst qwen = incident._qwen_json;\n\nincident.consensus = {\n  timestamp: new Date().toISOString(),\n  actor_model: 'qwen2.5-coder:3b-instruct',\n  critic_model: null,\n  proposal: qwen,\n  validation: null,\n  consensus_reached: qwen.action_level !== 2,\n  final_action: qwen.action_command,\n  should_execute: qwen.action_level === 1 && qwen.confidence >= 0.8\n};\n\nincident.level_1_diagnosis = qwen;\nincident.level_1_action = qwen.action_command;\n\nreturn [{ json: incident }];"
+      },
+      "id": "skip-consensus",
+      "name": "Skip Consensus (N1/N3)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-level1",
+              "leftValue": "={{ $json._qwen_json.action_level }}",
+              "rightValue": 1,
+              "operator": { "type": "number", "operation": "equals" }
+            },
+            {
+              "id": "cond-high-conf",
+              "leftValue": "={{ $json._qwen_json.confidence }}",
+              "rightValue": 0.8,
+              "operator": { "type": "number", "operation": "gte" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-auto-execute",
+      "name": "N1 Auto-Execute?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1320, 100]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.N8N_WEBHOOK_BASE_URL }}/auto-repare/execute-action",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "execute-n1",
+      "name": "Executer N1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.N8N_WEBHOOK_BASE_URL }}/auto-repare/escalate-n2",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "escalate-n3",
+      "name": "Escalader N3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 200]
+    }
+  ],
+  "connections": {
+    "Webhook Consensus Request": {
+      "main": [[{ "node": "Preparer Contexte Qwen", "type": "main", "index": 0 }]]
+    },
+    "Preparer Contexte Qwen": {
+      "main": [[{ "node": "Qwen - Acteur (YAML)", "type": "main", "index": 0 }]]
+    },
+    "Qwen - Acteur (YAML)": {
+      "main": [[{ "node": "Parser YAML Qwen -> JSON", "type": "main", "index": 0 }]]
+    },
+    "Parser YAML Qwen -> JSON": {
+      "main": [[{ "node": "Niveau 2? (Consensus Requis)", "type": "main", "index": 0 }]]
+    },
+    "Niveau 2? (Consensus Requis)": {
+      "main": [
+        [{ "node": "Phi-3 - Critique (YAML)", "type": "main", "index": 0 }],
+        [{ "node": "Skip Consensus (N1/N3)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Phi-3 - Critique (YAML)": {
+      "main": [[{ "node": "Parser YAML Phi -> JSON", "type": "main", "index": 0 }]]
+    },
+    "Parser YAML Phi -> JSON": {
+      "main": [[{ "node": "Construire Resultat Consensus", "type": "main", "index": 0 }]]
+    },
+    "Construire Resultat Consensus": {
+      "main": [[{ "node": "Consensus Approuve?", "type": "main", "index": 0 }]]
+    },
+    "Consensus Approuve?": {
+      "main": [
+        [{ "node": "Executer Action Approuvee", "type": "main", "index": 0 }],
+        [{ "node": "Notifier Conflit IA", "type": "main", "index": 0 }]
+      ]
+    },
+    "Skip Consensus (N1/N3)": {
+      "main": [[{ "node": "N1 Auto-Execute?", "type": "main", "index": 0 }]]
+    },
+    "N1 Auto-Execute?": {
+      "main": [
+        [{ "node": "Executer N1", "type": "main", "index": 0 }],
+        [{ "node": "Escalader N3", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

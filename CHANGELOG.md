@@ -2,6 +2,90 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2025-12-04
+
+### Dual-LLM Architecture Release
+
+Major release introducing multi-agent architecture with Qwen 2.5 (Actor) and Phi-3 (Critic) for consensus-based decision making.
+
+### Added
+
+- **Dual-LLM Consensus System**: New architecture with two local LLMs working together
+  - **Qwen 2.5 Coder 3B** (Actor): Proposes diagnostic and remediation actions
+  - **Phi-3 Mini 3.8B** (Critic): Validates proposed actions against security rules
+  - Communication protocol using YAML format, converted to JSON by N8N
+
+- **CAPABILITIES.md**: Complete documentation of the 3-level action framework
+  - **Level 1 (N1)**: Autonomous read-only actions (diagnostics, sanity checks)
+  - **Level 2 (N2)**: Remediation actions requiring Qwen+Phi consensus
+  - **Level 3 (N3)**: Human escalation for complex/risky operations
+
+- **Consensus Validator Workflow**: New N8N workflow for dual-LLM validation
+  - Qwen analysis with YAML output
+  - YAML to JSON conversion node
+  - Phi validation with security checks
+  - Decision routing (APPROVED/REJECTED/ESCALATE)
+
+- **Phi-3 Critic Prompt** (`prompts/phi3_critic.md`): Specialized prompt for action validation
+  - 4-point validation checklist (whitelist, diagnostic, risk, coherence)
+  - Alternative action suggestions on rejection
+  - YAML response format
+
+- **Flapping Detection**: Automatic false positive detection
+  - HTTP health check before full analysis
+  - Auto-close incidents tagged as FALSE_POSITIVE
+  - Configurable detection window (60s default)
+
+- **Enhanced Docker Compose**: Complete local infrastructure stack
+  - Ollama with multi-model support (Qwen + Phi-3 + Nomic Embed)
+  - Model auto-pull on startup via model-init service
+  - Qdrant vector database for RAG
+  - Redis queue for N8N workers
+  - PostgreSQL for N8N persistence
+  - Resource limits and health checks
+
+### Changed
+
+- **Main Supervisor Workflow (v3)**: Refactored for dual-LLM architecture
+  - Parallel RAG lookup and status check
+  - Flapping detection before analysis
+  - Delegation to Consensus Validator
+  - Support for RAG fast-track with high-confidence matches
+
+- **Qwen Prompt** (`prompts/qwen_n1_analyst.md`): Updated for Actor role
+  - YAML response format (replaces JSON)
+  - New fields: `action_level`, `logs_summary`, `expected_result`
+  - Confidence-based routing rules
+  - Clear Actor/Critic role definition
+
+- **safe_commands.json (v3.0)**: Restructured for 3-level architecture
+  - Separate command lists per level (N1, N2, N3)
+  - Consensus protocol configuration
+  - Enhanced blocked patterns list
+  - Flapping detection settings
+  - Audit logging configuration
+
+- **.env.template**: Updated for dual-LLM configuration
+  - Separate model configs for Actor and Critic
+  - Consensus protocol timeouts
+  - New Qdrant and Redis settings
+
+### Security
+
+- **Double Validation**: All N2 actions require both Qwen and Phi approval
+- **Strict Whitelist**: Commands organized by level with explicit allow/deny lists
+- **Blacklist Enforcement**: Zero-tolerance patterns checked by both LLMs
+- **Conflict Detection**: IA conflict triggers human notification
+
+### Technical Details
+
+- **LLM Communication**: YAML format for inter-LLM messages
+- **Consensus Timeout**: 60s total (30s Actor + 20s Critic + 10s overhead)
+- **Memory Requirements**: ~4GB for both models loaded simultaneously
+- **Parallel Inference**: Ollama configured for 2 parallel requests
+
+---
+
 ## [2.2.0] - 2025-12-01
 
 ### Production Release - Project COMPLETED

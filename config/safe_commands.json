@@ -1,123 +1,291 @@
 {
-  "description": "Liste blanche des commandes autorisées pour l'auto-guérison",
-  "version": "1.0.0",
-  "safe_commands": {
+  "description": "Liste blanche des commandes autorisees pour l'auto-guerison (v3.0 - Dual LLM)",
+  "version": "3.0.0",
+  "architecture": {
+    "actor": "Qwen 2.5 (3B)",
+    "critic": "Phi-3 (3.8B)",
+    "consensus_required_for": "level_2"
+  },
+  "levels": {
+    "level_1": {
+      "description": "Actions autonomes - Lecture seule, zero risque",
+      "requires_consensus": false,
+      "auto_execute_if_confidence": 0.8
+    },
+    "level_2": {
+      "description": "Actions de remediation - Validation Qwen+Phi obligatoire",
+      "requires_consensus": true,
+      "min_confidence": 0.6
+    },
+    "level_3": {
+      "description": "Escalade humaine - Hors perimetre IA",
+      "requires_consensus": false,
+      "always_escalate": true
+    }
+  },
+  "level_1_commands": {
+    "description": "Commandes de diagnostic (lecture seule)",
+    "http_checks": [
+      "curl -I {url}",
+      "curl -s -o /dev/null -w '%{http_code}' {url}"
+    ],
+    "service_status": [
+      "systemctl status {service}",
+      "systemctl is-active {service}"
+    ],
+    "docker_info": [
+      "docker ps",
+      "docker ps -a",
+      "docker logs --tail {lines} {container}",
+      "docker stats --no-stream"
+    ],
+    "system_resources": [
+      "df -h",
+      "free -m",
+      "free -h",
+      "uptime",
+      "cat /proc/loadavg",
+      "top -bn1 | head -20",
+      "ps aux --sort=-%mem | head -20"
+    ],
+    "network_diagnostics": [
+      "ping -c 4 {host}",
+      "ss -tlnp",
+      "netstat -tlnp"
+    ],
+    "log_reading": [
+      "tail -n {lines} {logfile}",
+      "journalctl -u {service} -n {lines} --no-pager",
+      "journalctl -n {lines} --no-pager"
+    ],
+    "certificate_checks": [
+      "openssl x509 -enddate -noout -in {file}",
+      "openssl s_client -connect {host}:{port} -servername {host} 2>/dev/null | openssl x509 -noout -dates"
+    ],
+    "allowed_log_paths": [
+      "/var/log/nginx/",
+      "/var/log/apache2/",
+      "/var/log/syslog",
+      "/var/log/auth.log",
+      "/var/log/docker/",
+      "/var/log/postgresql/",
+      "/var/log/redis/"
+    ],
+    "max_log_lines": 500
+  },
+  "level_2_commands": {
+    "description": "Commandes de remediation (validation consensus requise)",
     "service_management": {
       "description": "Gestion des services systemd",
-      "allowed": [
+      "allowed_operations": [
         "systemctl restart {service}",
+        "systemctl reload {service}",
         "systemctl start {service}",
-        "systemctl stop {service}",
-        "systemctl status {service}",
-        "systemctl reload {service}"
+        "systemctl stop {service}"
       ],
       "allowed_services": [
         "nginx",
         "apache2",
         "postgresql",
         "redis",
+        "redis-server",
         "docker",
-        "ssh"
+        "ssh",
+        "sshd"
+      ],
+      "forbidden_services": [
+        "systemd",
+        "dbus",
+        "udev",
+        "cron",
+        "rsyslog",
+        "networking"
       ]
     },
     "docker_management": {
       "description": "Gestion des conteneurs Docker",
-      "allowed": [
+      "allowed_operations": [
         "docker restart {container}",
         "docker start {container}",
-        "docker stop {container}",
-        "docker logs --tail {lines} {container}",
-        "docker ps -a",
-        "docker stats --no-stream"
+        "docker stop {container}"
       ],
-      "max_log_lines": 500
+      "allowed_containers_pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "forbidden_operations": [
+        "docker rm",
+        "docker rmi",
+        "docker exec",
+        "docker cp"
+      ]
     },
-    "log_management": {
-      "description": "Consultation et nettoyage des logs",
-      "allowed": [
-        "tail -n {lines} {logfile}",
-        "journalctl -u {service} -n {lines}",
-        "journalctl --vacuum-size=500M",
-        "truncate -s 0 {logfile}"
-      ],
-      "allowed_log_paths": [
-        "/var/log/nginx/",
-        "/var/log/apache2/",
-        "/var/log/syslog",
-        "/var/log/auth.log",
-        "/var/log/docker/"
-      ],
-      "max_log_lines": 1000
+    "pm2_management": {
+      "description": "Gestion PM2 (Node.js)",
+      "allowed_operations": [
+        "pm2 restart {id}",
+        "pm2 reload {id}",
+        "pm2 start {id}",
+        "pm2 stop {id}"
+      ]
     },
-    "disk_management": {
-      "description": "Nettoyage disque sécurisé",
-      "allowed": [
-        "df -h",
-        "du -sh {path}",
+    "disk_cleanup": {
+      "description": "Nettoyage disque securise",
+      "allowed_operations": [
         "apt-get clean",
         "apt-get autoremove -y",
         "docker system prune -f",
         "docker volume prune -f",
-        "journalctl --vacuum-time=7d"
+        "journalctl --vacuum-size=500M",
+        "journalctl --vacuum-time=7d",
+        "journalctl --vacuum-time=3d"
       ],
-      "allowed_paths_for_du": [
-        "/var/log",
-        "/tmp",
-        "/var/cache",
-        "/opt"
-      ]
+      "conditions": {
+        "disk_threshold_percent": 90,
+        "requires_verification": true
+      },
+      "allowed_cleanup_paths": [
+        "/var/log/*.gz",
+        "/var/log/nginx/*.gz",
+        "/var/log/apache2/*.gz",
+        "/tmp/*",
+        "/var/cache/apt/archives/*.deb"
+      ],
+      "cleanup_age_hours": 24
     },
-    "network_diagnostics": {
-      "description": "Diagnostics réseau",
-      "allowed": [
-        "ping -c 4 {host}",
-        "curl -I {url}",
-        "ss -tlnp",
-        "netstat -tlnp"
-      ]
-    },
-    "system_info": {
-      "description": "Information système",
-      "allowed": [
-        "uptime",
-        "free -h",
-        "df -h",
-        "top -bn1 | head -20",
-        "ps aux --sort=-%mem | head -20",
-        "cat /proc/loadavg"
+    "certificate_renewal": {
+      "description": "Renouvellement SSL/TLS",
+      "allowed_operations": [
+        "certbot renew --non-interactive",
+        "certbot renew --quiet"
+      ],
+      "conditions": {
+        "expiry_days_threshold": 7,
+        "port_80_required": true
+      },
+      "forbidden_operations": [
+        "certbot delete",
+        "certbot revoke"
       ]
     }
   },
+  "level_3_escalation": {
+    "description": "Actions TOUJOURS escaladees a l'humain",
+    "categories": [
+      "configuration_files",
+      "major_updates",
+      "sql_write",
+      "api_keys",
+      "network_firewall",
+      "user_management",
+      "system_mounts",
+      "critical_permissions"
+    ],
+    "file_patterns_forbidden": [
+      "*.conf",
+      "*.cfg",
+      "*.env",
+      "*.json",
+      "*.yaml",
+      "*.yml",
+      "*.toml",
+      "*.ini"
+    ],
+    "operations_forbidden": [
+      "apt upgrade",
+      "apt dist-upgrade",
+      "apt-get upgrade",
+      "docker pull",
+      "npm update",
+      "pip install --upgrade"
+    ]
+  },
   "blocked_patterns": {
-    "description": "Patterns de commandes TOUJOURS bloquées",
+    "description": "Patterns TOUJOURS bloques - Zero tolerance",
     "patterns": [
       "rm -rf",
       "rm -r /",
+      "rm -rf /",
+      "rm -rf /*",
+      "rm -rf ~/*",
       "dd if=",
+      "dd of=/dev",
       "mkfs",
       "fdisk",
       "> /dev/",
       "chmod 777",
       "chmod -R 777",
-      ":(){:|:&};:",
+      "chown -R root:root /",
+      ":(){ :|:& };:",
       "wget.*|.*sh",
       "curl.*|.*sh",
+      "wget.*bash",
+      "curl.*bash",
       "eval",
       "exec",
       "DROP DATABASE",
       "DROP TABLE",
       "TRUNCATE",
       "DELETE FROM.*WHERE 1=1",
-      "--no-preserve-root"
+      "UPDATE.*SET.*WHERE 1=1",
+      "--no-preserve-root",
+      "iptables -F",
+      "iptables -X",
+      "ufw disable",
+      "kill -9",
+      "pkill -9",
+      "killall -9",
+      "shutdown",
+      "reboot",
+      "init 0",
+      "init 6",
+      "halt",
+      "poweroff"
+    ]
+  },
+  "consensus_protocol": {
+    "description": "Protocole de validation Qwen + Phi",
+    "actor_model": "qwen2.5-coder:3b-instruct",
+    "critic_model": "phi3:3.8b-mini-instruct",
+    "timeout_seconds": {
+      "actor_analysis": 30,
+      "critic_validation": 20,
+      "total_consensus": 60
+    },
+    "decision_rules": {
+      "approved": "Phi checks all pass AND confidence >= 0.6",
+      "rejected": "Any Phi check fails OR confidence < 0.6",
+      "conflict": "Actor and Critic disagree - escalate to human"
+    },
+    "phi_checks": [
+      "whitelist_valid",
+      "diagnostic_justified",
+      "no_collateral_risk",
+      "action_coherent"
     ]
   },
   "validation_rules": {
     "max_command_length": 500,
+    "max_chained_commands": 3,
+    "allowed_chain_operators": ["&&"],
+    "forbidden_chain_operators": [";", "||", "|", "&"],
     "require_human_approval_for": [
-      "Any command not in safe_commands list",
+      "Any command not in whitelist",
       "Commands affecting multiple services",
       "Commands with wildcards (*)",
-      "Commands running as different user (su, sudo -u)"
+      "Commands running as different user (su, sudo -u)",
+      "Commands modifying configuration files",
+      "Commands with network/firewall impact"
     ]
+  },
+  "flapping_detection": {
+    "description": "Detection des fausses alertes",
+    "enabled": true,
+    "window_seconds": 60,
+    "http_success_codes": ["200", "201", "204", "301", "302", "304"],
+    "auto_close_tag": "FALSE_POSITIVE"
+  },
+  "audit": {
+    "log_all_proposals": true,
+    "log_all_validations": true,
+    "log_all_executions": true,
+    "retention_days": 90
   }
 }
