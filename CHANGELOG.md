@@ -2,7 +2,42 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
-## [3.0.0] - 2024-12-06
+## [3.1.0] - 2025-12-06
+
+### Contexte
+
+Suite à l'incident de sécurité du 2025-12-06 (exploitation du port Ollama 11434 par IP 103.192.152.218), ajout de capacités de détection proactive.
+
+### Ajouté
+
+- **Security Scan Daily** : Nouveau workflow de scan quotidien (100% déterministe, 0 LLM)
+  - `security_scan_ports.js` : Détection des ports exposés sur 0.0.0.0
+  - `security_scan_ollama.js` : Vérification des modèles installés vs whitelist
+  - `security_scan_iptables.js` : Vérification des règles DROP pour ports critiques
+  - `security_scan_report.js` : Agrégation et génération de rapport
+
+- **Security Intents V3.1** : Extension de l'Intent Engine
+  - Intents READ-ONLY : `audit_exposed_ports`, `check_ollama_models`, `verify_iptables_critical`, `check_fail2ban_status`, `list_ssh_connections`
+  - Intents ACTION : `block_ip`, `unblock_ip`, `delete_ollama_model`
+
+- **Configuration whitelists** : `config/security_whitelists.example.json`
+
+- **Documentation** : `docs/SECURITY_SCAN.md`
+
+### Sécurité
+
+- Détection quotidienne des ports exposés non autorisés
+- Détection des modèles Ollama suspects/non autorisés
+- Vérification automatique des règles iptables
+- Alertes email en cas d'anomalie
+
+### Limites documentées
+
+- Fenêtre de 24h entre les scans
+- Détection post-hoc (ne prévient pas l'attaque initiale)
+- La vraie sécurité = configuration correcte dès le départ
+
+## [3.0.0] - 2025-12-06
 
 ### ⚠️ BREAKING CHANGES
 
