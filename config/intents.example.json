@@ -1,0 +1,95 @@
+{
+  "_comment": "Template de configuration des intents. Copiez vers intents.json et personnalisez.",
+  "version": "3.0",
+  
+  "intents": {
+    "restart_service": {
+      "command_template": "systemctl restart {target}",
+      "valid_targets": ["nginx", "php8.1-fpm", "postgresql", "redis-server"],
+      "risk_level": "low",
+      "requires_approval": false,
+      "cooldown_seconds": 300,
+      "description": "Redémarre un service systemd"
+    },
+    
+    "stop_service": {
+      "command_template": "systemctl stop {target}",
+      "valid_targets": ["nginx", "php8.1-fpm"],
+      "risk_level": "medium",
+      "requires_approval": true,
+      "cooldown_seconds": 600,
+      "description": "Arrête un service systemd - REQUIERT APPROBATION"
+    },
+    
+    "docker_restart": {
+      "command_template": "docker restart {target}",
+      "valid_targets": ["app-main", "app-worker", "redis", "ollama", "qdrant"],
+      "risk_level": "low",
+      "requires_approval": false,
+      "cooldown_seconds": 300,
+      "description": "Redémarre un container Docker"
+    },
+    
+    "docker_stop": {
+      "command_template": "docker stop {target}",
+      "valid_targets": ["app-worker"],
+      "risk_level": "medium",
+      "requires_approval": true,
+      "cooldown_seconds": 600,
+      "description": "Arrête un container Docker - REQUIERT APPROBATION"
+    },
+    
+    "clear_system_logs": {
+      "command_template": "journalctl --vacuum-size=500M",
+      "valid_targets": [],
+      "risk_level": "low",
+      "requires_approval": false,
+      "cooldown_seconds": 3600,
+      "description": "Nettoie les logs système pour libérer de l'espace"
+    },
+    
+    "docker_prune": {
+      "command_template": "docker system prune -f",
+      "valid_targets": [],
+      "risk_level": "medium",
+      "requires_approval": true,
+      "cooldown_seconds": 3600,
+      "description": "Supprime les ressources Docker inutilisées - REQUIERT APPROBATION"
+    },
+    
+    "check_disk": {
+      "command_template": "df -h /",
+      "valid_targets": [],
+      "risk_level": "none",
+      "requires_approval": false,
+      "cooldown_seconds": 0,
+      "description": "Vérifie l'espace disque (lecture seule)"
+    },
+    
+    "check_memory": {
+      "command_template": "free -h",
+      "valid_targets": [],
+      "risk_level": "none",
+      "requires_approval": false,
+      "cooldown_seconds": 0,
+      "description": "Vérifie la RAM (lecture seule)"
+    },
+    
+    "ESCALATE": {
+      "command_template": null,
+      "valid_targets": [],
+      "risk_level": "none",
+      "requires_approval": false,
+      "cooldown_seconds": 0,
+      "description": "Escalade vers niveau supérieur (humain ou Claude)"
+    }
+  },
+  
+  "rate_limits": {
+    "per_service_per_hour": 3,
+    "global_per_hour": 10,
+    "escalation_threshold": 5
+  },
+  
+  "blocked_patterns": [";", "|", "&&", "||", "`", "$(", "${", ">", "<", "\\n", "\\r"]
+}

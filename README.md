@@ -1,183 +1,173 @@
-# Self-Healing Infra - Agentic Auto-Fix System
+# Self-Healing Infra - Agentic Auto-Fix System V3
 
-![Status](https://img.shields.io/badge/Status-COMPLETED-success)
-![Version](https://img.shields.io/badge/Version-2.2.0-blue)
+![Status](https://img.shields.io/badge/Status-ACTIVE-success)
+![Version](https://img.shields.io/badge/Version-3.0.0-blue)
+![Security](https://img.shields.io/badge/Security-Hardenized-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-Architecture AIOps Enterprise-Grade : Orchestration N8N + IA Hybride (Qwen/Claude) avec controle humain strict.
+Architecture AIOps Enterprise-Grade : Orchestration N8N + IA Hybride avec **Intent Engine** sécurisé.
 
-> **Projet termine et valide en production** - Systeme d'auto-guerison fonctionnel avec notifications email et monitoring Uptime Kuma.
+> **V3 "Hardenized"** - Le LLM génère des intents, pas des commandes. La sécurité vient du code, pas de l'IA.
 
-## Fonctionnalites Cles
+## Principe Fondamental V3
 
-- **Auto-diagnostic** : Analyse automatique des pannes via IA locale (Qwen 2.5)
-- **Auto-reparation** : Execution securisee des actions correctives
-- **Notifications intelligentes** : Emails HTML avec statut de resolution
-- **Escalade N2** : Analyse approfondie Claude si echec N1
-- **Validation humaine** : Approbation requise pour actions sensibles
-- **Historique RAG** : Apprentissage des incidents passes via Qdrant
+> **"L'IA classe, mais c'est le Code (Whitelists) qui autorise."**
 
-## Architecture
+Le LLM ne génère **jamais** de commande shell. Il génère un **intent structuré** qui est validé et mappé par du code déterministe.
+
+## Architecture V3 Hardenized
 
 ```
-┌─────────────────┐     Webhook      ┌──────────────────────────────────────┐
-│  Uptime Kuma    │ ───────────────► │           N8N Workflows               │
-│  (Monitoring)   │                  │                                       │
-└─────────────────┘                  │  ┌─────────────────────────────────┐  │
-                                     │  │     Main Supervisor             │  │
-                                     │  │  • Reception alerte             │  │
-                                     │  │  • Collecte logs SSH            │  │
-                                     │  │  • Analyse Qwen (N1)            │  │
-                                     │  │  • Validation commande          │  │
-                                     │  └──────────────┬──────────────────┘  │
-                                     │                 │                     │
-                                     │  ┌──────────────▼──────────────────┐  │
-                                     │  │     Action Executor             │  │
-                                     │  │  • Execution action safe        │  │
-                                     │  │  • Verification HTTP/service    │  │
-                                     │  │  • Notification succes/echec    │  │
-                                     │  │  • Escalade N2 si echec         │  │
-                                     │  └──────────────┬──────────────────┘  │
-                                     │                 │                     │
-                                     │  ┌──────────────▼──────────────────┐  │
-                                     │  │   Notification Manager          │  │
-                                     │  │  • Email succes (auto-guerison) │  │
-                                     │  │  • Email echec (escalade N2)    │  │
-                                     │  │  • Email validation humaine     │  │
-                                     │  └─────────────────────────────────┘  │
-                                     └──────────────────────────────────────┘
+ALERT (Uptime Kuma)
+   │
+   ▼
+┌──────────────────────────────────────────┐
+│ 1. PARALLEL CONTEXT FETCH                │
+│    ├─ Qdrant: incidents similaires       │
+│    └─ AuraCore: règles + intents valides │
+└──────────────────────────────────────────┘
+   │
+   ▼
+┌──────────────────────────────────────────┐
+│ 2. RATE LIMITING GATE                    │
+│    SI > 3 restarts/h/service → STOP      │
+│    SI > 10 global executions/h → STOP    │
+└──────────────────────────────────────────┘
+   │
+   ▼
+┌──────────────────────────────────────────┐
+│ 3. FAST TRACK GATE                       │
+│    SI match RAG > 0.85 ET intent connu   │
+│    → Execute via Intent Map (0 LLM)      │
+└──────────────────────────────────────────┘
+   │ SINON
+   ▼
+┌──────────────────────────────────────────┐
+│ 4. QWEN "Technicien"                     │
+│    Output: {intent, target, confidence}  │
+│    ⚠️ PAS de commande shell              │
+└──────────────────────────────────────────┘
+   │
+   ▼
+┌──────────────────────────────────────────┐
+│ 5. INTENT & TARGET VALIDATION ENGINE     │
+│    • Intent in whitelist?                │
+│    • Target in valid_targets?            │
+│    • No injection patterns?              │
+│    → Generate safe command               │
+└──────────────────────────────────────────┘
+   │
+   ▼
+┌──────────────────────────────────────────┐
+│ 6. AUDIT TRAIL                           │
+│    Log avant + après exécution           │
+│    Feedback loop → Qdrant                │
+└──────────────────────────────────────────┘
+```
+
+## Composants de Sécurité V3
+
+| Composant | Rôle | Protection |
+|-----------|------|------------|
+| **Intent Engine** | Map intent → commande | LLM ne peut pas inventer de commande |
+| **Target Whitelist** | Valide les cibles | Seuls services prédéfinis acceptés |
+| **Injection Blocker** | Détecte `;`, `&&`, `\|` | Empêche le chaînage de commandes |
+| **Rate Limiter** | 3/h/service, 10/h global | Anti-boucle et anti-DoS |
+| **Fast Track** | Bypass LLM si RAG > 0.85 | Réduit surface d'attaque |
+| **Audit Trail** | Log immuable | Forensics et compliance |
+
+## Niveaux de Résolution V3
+
+| Niveau | Condition | Méthode | Temps |
+|--------|-----------|---------|-------|
+| **N0 Fast Track** | RAG match > 0.85 | 0 LLM, Intent Map direct | ~5s |
+| **N1 Standard** | Pas de match RAG | Qwen → Intent Engine | ~90s |
+| **N1.5 Dual** | Qwen conf < 0.8 | Qwen → Phi validation | ~150s |
+| **N2 Expert** | Escalade | Claude + validation humaine | API |
+
+## Intents Disponibles
+
+```javascript
+const INTENTS = {
+  // Low Risk - Auto-exécution
+  "restart_service": ["nginx", "php8.x-fpm", "postgresql", "redis-server"],
+  "docker_restart": ["n8n-main-prod", "ollama", "qdrant"],
+  "clear_system_logs": [],
+  "check_disk": [],
+  "check_memory": [],
+  
+  // Medium Risk - Approbation requise
+  "stop_service": ["nginx", "php8.x-fpm"],
+  "docker_stop": ["n8n-worker-prod-1"],
+  "docker_prune": [],
+  
+  // Special
+  "ESCALATE": []  // Demande intervention humaine
+};
 ```
 
 ## Stack Technique
 
-| Composant | Role | Port |
+| Composant | Rôle | Port |
 |-----------|------|------|
 | **N8N** | Orchestrateur workflows | 5678 |
 | **Uptime Kuma** | Monitoring & alertes | 3001 |
 | **Ollama** | LLM local (Qwen 2.5 Coder 3B) | 11434 |
 | **Qdrant** | Vector Store (RAG) | 6333 |
+| **AuraCore MCP** | Règles métier & contexte | MCP |
 | **PostgreSQL** | Base N8N | 5432 |
+| **Redis** | Cache & Rate Limiting | 6379 |
 
-## Workflows N8N
-
-### 1. Main Supervisor
-- Reception des alertes Uptime Kuma via webhook
-- Collecte des logs systeme et Docker via SSH
-- Analyse IA niveau 1 avec Qwen 2.5
-- Validation des commandes contre whitelist
-- Routage vers Action Executor ou escalade
-
-### 2. Action Executor
-- Execution des actions correctives via SSH
-- Verification du retablissement du service
-- Support des codes HTTP 2xx et 3xx (redirections)
-- Notification de succes avec details complets
-- Escalade automatique N2 en cas d'echec
-
-### 3. Notification Manager
-- Routage intelligent selon le type (success/failure/escalation)
-- Generation d'emails HTML professionnels
-- Liens de validation pour approbation humaine
-- Confirmation d'execution post-validation
-
-## Niveaux de Resolution
-
-### Niveau 1 - Qwen (Local)
-- Analyse rapide des logs (~3-4 minutes)
-- Actions simples : restart service, restart container
-- Validation automatique si commande dans whitelist
-- **Cout : Gratuit (local)**
-
-### Niveau 2 - Claude (Cloud)
-- Analyse approfondie root cause
-- Diagnostic complexe avec recommandations
-- **Validation humaine obligatoire**
-- Enrichissement du contexte RAG
-- **Cout : API Anthropic**
-
-## Securite
-
-### Whitelist des Commandes
-Seules les commandes pre-approuvees sont executees :
-- `docker restart {container}`
-- `systemctl restart {service}`
-- Services autorises configures dans le workflow
-
-### Validation Humaine
-- Escalade N2 requiert approbation par email
-- Tokens uniques avec expiration
-- Audit trail complet
-
-## Types d'Emails
-
-| Type | Declencheur | Contenu |
-|------|-------------|---------|
-| **Succes** | Auto-guerison reussie | Incident ID, Service, Action executee |
-| **Echec** | N1 echoue, escalade N2 | Diagnostic, Action tentee, Statut escalade |
-| **Validation** | Action N2 en attente | Boutons Valider/Ignorer, Details action |
-
-## Installation
-
-### Prerequis
-- VPS Linux (Debian/Ubuntu)
-- Docker et Docker Compose
-- N8N installe
-- Ollama avec modele Qwen 2.5
-
-### Configuration
-
-1. **Importer les workflows** dans N8N
-2. **Configurer les credentials** :
-   - SSH vers le serveur cible
-   - SMTP pour les emails
-   - API Anthropic (optionnel, pour N2)
-3. **Configurer Uptime Kuma** :
-   - Ajouter les monitors avec endpoint `/health`
-   - Configurer le webhook vers N8N
-4. **Configurer le reseau Docker** :
-   - Autoriser le trafic entre containers et host
-
-## Structure du Projet
+## Structure du Projet V3
 
 ```
 self-healing-infra/
-├── workflows/                    # Workflows N8N (structure uniquement)
-│   ├── Main_Supervisor.json
-│   ├── Action_Executor.json
-│   └── Notification_Manager.json
-├── config/
-│   └── safe_commands.json        # Whitelist des commandes
-├── prompts/
-│   ├── qwen_n1_analyst.md        # Prompt analyse N1
-│   └── claude_n2_expert.md       # Prompt analyse N2
 ├── docs/
-│   └── ARCHITECTURE_V2.md        # Documentation technique
-├── CHANGELOG.md                  # Historique des versions
+│   ├── ARCHITECTURE_V3.md        # Documentation complète V3
+│   └── SECURITY.md               # Analyse de sécurité
+├── n8n/
+│   ├── nodes/
+│   │   ├── rate_limiter_gate.js      # Rate limiting
+│   │   ├── fast_track_gate.js        # Fast track RAG
+│   │   ├── intent_engine.js          # Moteur d'intent (CORE)
+│   │   └── audit_trail.js            # Logging
+│   └── workflows/
+│       └── README.md                 # Instructions import
+├── prompts/
+│   ├── qwen_technician_v3.md         # Prompt format intent
+│   └── phi_auditor.md                # Prompt validation
+├── config/
+│   ├── intents.example.json          # Template intents
+│   └── targets.example.json          # Template targets
+├── CHANGELOG.md
 └── README.md
 ```
 
-## Metriques de Production
+## Scores de Sécurité V3
 
-| Metrique | Valeur |
-|----------|--------|
-| Temps moyen de detection | < 60s |
-| Temps moyen de resolution N1 | ~4 min |
-| Taux de succes auto-guerison | Variable selon service |
-| Faux positifs | Minimises par whitelist |
+| Critère | Score | Commentaire |
+|---------|-------|-------------|
+| Viabilité | 8/10 | Architecture solide |
+| Sécurité | 7.5/10 | Intent Engine + Whitelists |
+| Coût/Bénéfice | 8/10 | Fast Track réduit les appels LLM |
+| **Global** | **7.5/10** | Production-ready |
 
-## Roadmap (Complete)
+## Changelog V3
 
-- [x] Architecture multi-workflows
-- [x] Integration Uptime Kuma
-- [x] Analyse IA N1 (Qwen local)
-- [x] Execution securisee via SSH
-- [x] Notifications email differenciees
-- [x] Support HTTP 3xx (redirections)
-- [x] Extraction correcte des donnees webhook
-- [x] Routage conditionnel des notifications
-- [x] Monitoring avec endpoint /health
-- [x] Escalade N2 avec Claude (structure)
-- [x] RAG avec Qdrant (structure)
+### v3.0.0 (2024-12)
+- ✅ **Intent Engine** : LLM génère des intents, pas des commandes
+- ✅ **Target Whitelist** : Validation stricte des cibles
+- ✅ **Rate Limiting** : Protection anti-boucle
+- ✅ **Fast Track Gate** : Bypass LLM si solution connue
+- ✅ **Audit Trail** : Logging complet avant/après
+- ✅ **Injection Blocker** : Détection patterns dangereux
+
+### v2.2.0
+- Architecture dual-LLM consensus (obsolète en V3)
+
+## Installation
+
+Voir [docs/ARCHITECTURE_V3.md](docs/ARCHITECTURE_V3.md) pour les instructions détaillées.
 
 ## Licence
 
@@ -185,6 +175,6 @@ MIT - Voir [LICENSE](LICENSE)
 
 ---
 
-**Projet realise par AuraStack AI Agency**
+**Projet réalisé par AuraStack AI Agency**
 
 *Architecture d'infrastructures autonomes et intelligentes*

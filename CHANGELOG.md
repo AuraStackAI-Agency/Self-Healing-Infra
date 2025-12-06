@@ -1,167 +1,76 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+Toutes les modifications notables de ce projet sont documentées ici.
 
-## [3.0.0] - 2025-12-05
+## [3.0.0] - 2024-12-06
 
-### Major Release - Dual-LLM Consensus System (AILCP)
+### ⚠️ BREAKING CHANGES
 
-This release introduces a revolutionary **dual-LLM consensus mechanism** using the AILCP protocol for highly reliable automated incident resolution.
+- Le LLM ne génère plus de commandes shell, seulement des intents
+- Nouveau format de réponse Qwen requis
+- Nouveaux nœuds N8N obligatoires
 
-### Added
+### Ajouté
 
-- **AuraCore API V2**: Complete rewrite with dual-LLM architecture
-  - Qwen 2.5 Coder 3B as DIAGNOSTICIAN (first-line analysis)
-  - Phi-3 Mini 3.8B as VALIDATOR (independent challenge)
-  - AILCP (AI-to-LLM Communication Protocol) for structured inter-LLM communication
+- **Intent Engine** : Validation et mapping des intents vers commandes sécurisées
+- **Fast Track Gate** : Bypass LLM si solution connue (RAG > 0.85)
+- **Rate Limiter** : Protection anti-boucle (3/h/service, 10/h global)
+- **Audit Trail** : Logging complet avant/après exécution
+- **Injection Blocker** : Détection patterns dangereux (`;`, `|`, `&&`, etc.)
+- **Qdrant Feedback** : Enrichissement automatique du RAG
+- Documentation complète V3
 
-- **Consensus Decision Matrix**: Automatic routing based on LLM agreement
-  - `AUTO_EXECUTE`: Both LLMs agree with high confidence (≥0.8)
-  - `EXECUTE_WITH_LOG`: Agreement with moderate confidence (≥0.6)
-  - `HUMAN_REVIEW`: Partial agreement, requires human validation
-  - `ESCALATE_N2`: Disagreement or low confidence, escalate to Claude
+### Modifié
 
-- **Robust Pydantic Validators**: Handle imperfect LLM responses
-  - Template literal detection (e.g., "AGREE|PARTIAL|DISAGREE" → "PARTIAL")
-  - Null-to-empty-string conversion
-  - Dict-to-string serialization for nested objects
+- Prompt Qwen restructuré pour format Intent
+- Architecture des workflows simplifiée
+- Séparation code/configuration
 
-- **Optimized System Prompts**: 
-  - `qwen_diagnostician.md`: Focused diagnostic prompt with whitelist enforcement
-  - `phi3_validator.md`: Compact validation prompt (41 lines) for faster responses
+### Supprimé
 
-- **N3 Escalation Workflow**: Claude Opus architect-level analysis for complex issues
+- Dual-LLM consensus systématique (remplacé par validation code)
+- Génération directe de commandes par LLM
 
-- **Architecture Documentation V3**: Complete system diagrams with ASCII art
+### Sécurité
 
-### Changed
+- Score sécurité : 5/10 → 7.5/10
+- Élimination du risque d'hallucination de commande
+- Protection contre prompt injection
+- Whitelist stricte des targets
 
-- **Timeout Configuration**: Increased from 120s to 180s for cold-start scenarios
-- **Model Configuration**: Environment variable based for flexibility
-- **Error Handling**: Graceful degradation with fallback responses
+## [2.2.0] - 2024-11
 
-### Performance
+### Ajouté
 
-| Metric | Value |
-|--------|-------|
-| Qwen response time | ~25 seconds |
-| Phi-3 response time | ~40 seconds |
-| Total consensus time | ~65-90 seconds |
-| Diagnostic accuracy | 90% |
+- Architecture Dual-LLM (Qwen + Phi consensus)
+- Intégration AuraCore basique
 
-### Test Results
+### Problèmes identifiés
 
-Successfully validated 6 incident scenarios:
-1. ✅ Nginx port conflict → AUTO_EXECUTE
-2. ✅ Docker OOM → AUTO_EXECUTE  
-3. ✅ Disk full → AUTO_EXECUTE
-4. ✅ PostgreSQL corruption → ESCALATE (correctly identified as dangerous)
-5. ✅ SSL expired → AUTO_EXECUTE
-6. ✅ Redis connection refused → AUTO_EXECUTE
+- Biais corrélés entre Qwen et Phi
+- Sécurité théâtre (consensus ≠ correction)
+- Overhead temps significatif
 
----
+## [2.1.0] - 2024-10
 
-## [2.2.0] - 2025-12-01
+### Ajouté
 
-### Production Release - Project COMPLETED
+- Notifications email différenciées
+- Support HTTP 3xx (redirections)
+- Escalade N2 avec Claude
 
-This release marks the completion of the Self-Healing Infrastructure POC with full production validation.
+## [2.0.0] - 2024-09
 
-### Fixed
+### Ajouté
 
-- **Action Executor - Data Extraction**: Fixed webhook payload extraction in "Notifier Succes" node. Data now correctly extracted from `body` property using fallback pattern (`body?.field || field`)
+- Architecture multi-workflows
+- Intégration Uptime Kuma
+- RAG avec Qdrant
 
-- **Action Executor - HTTP 3xx Support**: Modified "Evaluer Resultat" node to accept HTTP 3xx status codes (redirects) as successful responses, not just 2xx
+## [1.0.0] - 2024-08
 
-- **Notification Manager - Type Routing**: Fixed conditional routing in "Type de Notification" and "Type Failure?" nodes to correctly detect notification type from webhook body (`$json.body?.type || $json.type`)
+### Ajouté
 
-- **Notification Manager - Incident Extraction**: Updated "Generer Email Succes" to properly extract incident data from nested body structure (`data.body?.incident || data.incident`)
-
-- **Uptime Kuma Monitor**: Fixed monitor URL from `localhost:8100` to Docker gateway IP for proper container-to-host communication. Added `/health` endpoint for accurate health checks
-
-### Added
-
-- **Uptime Kuma Monitor**: New monitor "tww3-http-server" configured with:
-  - Health endpoint monitoring (`/health`)
-  - 60 second interval
-  - Auto-Repare webhook notification
-  - Proper network routing via Docker gateway
-
-- **iptables Rule**: Added firewall rule to allow Docker containers to access host services on monitored ports
-
-### Validated
-
-- **Complete Workflow Test**: End-to-end test from Uptime Kuma alert to success email notification
-- **Email Content**: Success emails now contain all incident fields (ID, service name, action executed)
-- **HTTP Redirect Handling**: Services returning 301/302 are correctly marked as healthy
-
-### Email Types Working
-
-| Type | Trigger | Status |
-|------|---------|--------|
-| Success | Auto-healing succeeded | VALIDATED |
-| Failure | N1 failed, escalating to N2 | VALIDATED |
-| Escalation | N2 action pending approval | VALIDATED |
-
----
-
-## [2.1.0] - 2025-11-30
-
-### Production Hardening Release
-
-This release addresses architectural improvements identified during production readiness review.
-
-### Fixed
-
-- **Ollama URL**: Changed from `localhost:11434` to host IP in Main Supervisor workflow to ensure proper network routing within Docker environment
-- **Qdrant ID collision**: Replaced `Date.now()` with deterministic ID generation using incident timestamp + random suffix to prevent vector storage conflicts
-
-### Added
-
-- **Retry/Timeout on HTTP calls**: All external HTTP requests now include proper timeout and retry configuration:
-  - Ollama API: 60s timeout, 2 retries, 5s between attempts
-  - Qdrant API: 15s timeout, 3 retries, 1s between attempts
-  - Claude API: 120s timeout, 2 retries, 10s between attempts
-  - Internal webhooks: 30s timeout, 3 retries, 2s between attempts
-
-- **Human validation execution**: Added "Executer Action Approuvee" node in Notification Manager to actually execute actions after human approval via email link
-
-- **Enhanced incident payload**: Added `error_type` field to normalized payload for better incident categorization:
-  - `timeout`: Connection timeout errors
-  - `connection_error`: Network/connection issues
-  - `service_down`: Service unavailable
-  - `unknown`: Other errors
-
-- **Secure validation tokens**: Email escalation links now include:
-  - Timestamped tokens for expiration tracking (24h validity)
-  - Complete action context (incident_id, service_name, action_command, monitor_url)
-  - Separate approve/ignore tokens for security
-
-- **Automated update script**: `scripts/update_all_workflows.py` for batch workflow updates via N8N API
-
-### Changed
-
-- **Email template**: Improved escalation email with:
-  - Modern gradient design
-  - Severity badge with color coding
-  - Complete incident context display
-  - Risk display section
-  - Professional styling
-
-### Security
-
-- All validation URLs now include expiration timestamps
-- Tokens are unique per incident and action type
-- Complete audit trail in webhook parameters
-
----
-
-## [2.0.0] - 2025-11-27
-
-### Initial Release
-
-- Main Supervisor workflow with Uptime Kuma webhook integration
-- Action Executor with Qwen N1 analysis and safe command execution
-- Notification Manager with email alerts and human validation
-- RAG integration with Qdrant for incident learning
-- Two-tier AI analysis (Qwen local + Claude cloud)
+- Version initiale
+- Workflow monolithique
+- Qwen local uniquement
