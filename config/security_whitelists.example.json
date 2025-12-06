@@ -1,0 +1,53 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2025-12-06",
+  
+  "allowed_exposed_ports": {
+    "description": "Ports autorisés à être exposés sur 0.0.0.0",
+    "values": [22, 80, 443],
+    "rationale": "SSH (clé uniquement), HTTP/HTTPS (nginx reverse proxy)"
+  },
+  
+  "allowed_ollama_models": {
+    "description": "Modèles Ollama autorisés sur le VPS",
+    "values": [
+      "qwen2.5-coder:3b-instruct",
+      "phi3:mini",
+      "nomic-embed-text:latest",
+      "llava:7b",
+      "llama3.2-vision:11b"
+    ],
+    "action_on_unknown": "alert_and_log"
+  },
+  
+  "critical_ports_require_drop": {
+    "description": "Ports qui DOIVENT avoir une règle DROP dans iptables",
+    "values": [
+      {"port": 11434, "service": "ollama"},
+      {"port": 6333, "service": "qdrant-http"},
+      {"port": 6334, "service": "qdrant-grpc"},
+      {"port": 5432, "service": "postgresql"},
+      {"port": 8080, "service": "n8n"},
+      {"port": 3000, "service": "internal-api"},
+      {"port": 3001, "service": "n8n-webhook"},
+      {"port": 8000, "service": "fastapi"},
+      {"port": 8001, "service": "fastapi-alt"},
+      {"port": 8096, "service": "whisper"},
+      {"port": 8100, "service": "mcp-server"},
+      {"port": 8200, "service": "health-api"},
+      {"port": 8900, "service": "auracore"}
+    ]
+  },
+  
+  "scan_schedule": {
+    "cron": "0 3 * * *",
+    "timezone": "UTC",
+    "description": "Tous les jours à 03:00 UTC"
+  },
+  
+  "alerting": {
+    "email_on_anomaly": true,
+    "log_all_scans": true,
+    "qdrant_collection": "security_scans"
+  }
+}
